@@ -1,0 +1,1293 @@
+* [2015-05-27 Mi] daten
+#+BEGIN_SRC R :session :results none
+  setwd("/media/mvogel/Volume/transcend/doktoranden/daxer")
+  require(foreign)
+  require(Hmisc)
+  require(reshape2)
+  
+  ## schlaf <- spss.get("201503daten.sav")
+  schlaf <- spss.get("Schlafstudie_Daxer_190615.sav")
+  
+  basis <- c("P.Code","Patient.Geschlecht","Gewichtsstatus","IGT","Einschlafuhrzeit","Uhrzeit.BE1h","sleep.efficiancy",
+             "Chemerin.1h","Progranulin.1h","Uhrzeit.BE1.5h","Chemerin.1.5h",
+             "Progranulin.1.5h","Uhrzeit.BE2h","Chemerin.2h","Progranulin.2h",
+             "Uhrzeit.BE2.5h","Chemerin.2.5h","Progranulin.2.5h","Uhrzeit.BE3h",
+             "Chemerin.3h","Progranulin.3h","Uhrzeit.BE3.5h","Chemerin.3.5h",
+             "Progranulin.3.5h","Uhrzeit.BE4h","Chemerin.4h","Progranulin.4h",
+             "Uhrzeit.BE4.5h","Chemerin.4.5h","Progranulin.4.5h","Uhrzeit.BE5h",
+             "Chemerin.5h","Progranulin.5h")
+  
+  
+  
+  data <- schlaf[,c(basis[!grepl("Uhrzeit",basis)])]
+  
+  data <- melt(data,id.vars = c("P.Code","Patient.Geschlecht","sleep.efficiancy","Gewichtsstatus","IGT","Einschlafuhrzeit"))
+  
+  data$zeit <- gsub("[A-Za-z]+\\.","",data$variable)
+  
+  data$zeit <- as.numeric(gsub("h","",data$zeit))
+  data$mg <- gsub("\\..+","",data$variable)
+  
+  data$zeit <- data$zeit - 1
+  
+  zeiten <- schlaf[,c("P.Code","Patient.Geschlecht","sleep.efficiancy","Gewichtsstatus","IGT","Einschlafuhrzeit",
+                      basis[grepl("Uhrzeit",basis)])]
+  
+  
+  zeiten <- melt(zeiten,id.vars = c("P.Code","Patient.Geschlecht","sleep.efficiancy","Gewichtsstatus","IGT","Einschlafuhrzeit"))
+  
+  zeiten$zeit <- gsub("Uhrzeit.BE","",zeiten$variable)
+  
+  zeiten$zeit <- as.numeric(gsub("h","",zeiten$zeit))
+  zeiten$uhrzeit <- zeiten$value/3600
+  
+  zeiten$zeit <- zeiten$zeit-1
+  
+  
+  data <- merge(data,zeiten[c("P.Code","zeit","uhrzeit")],by=c("P.Code","zeit"))
+  
+  data$mg <- gsub("\\..+","",data$variable)
+  
+  
+  data$uhrzeit[data$uhrzeit < 19 & !is.na(data$uhrzeit)] <- data$uhrzeit[data$uhrzeit < 19 & !is.na(data$uhrzeit) ] + 24
+  data$Gewichtsstatus <- factor(data$Gewichtsstatus,levels=c("schlank","Adipös"))
+  
+#+END_SRC
+
+#+BEGIN_SRC R :session :results none
+  require(ggplot2)
+
+  ggplot(data,aes(x=factor(zeit),y=value,fill=Gewichtsstatus)) +
+      geom_boxplot() +
+      stat_summary(geom="point",fun.y="mean",colour="red",size=4,position=position_dodge(width=0.75)) +
+    facet_wrap(~mg,scales="free",nrow=2)
+      
+#+END_SRC
+
+
+#+BEGIN_SRC R :session :results none
+
+  ggplot(data,aes(x=zeit,y=value)) +
+      geom_smooth(aes(colour=paste(P.Code)),se=F) +
+      geom_jitter(aes(colour=Patient.Geschlecht),position = position_jitter(width=0.1)) +
+    facet_wrap(~mg,scales="free",nrow=2)
+
+#+END_SRC
+
+[[boxplots.png]]
+
+
+**  Progranulin Model mit zeit und Gewichts status plus interaktion
+#+BEGIN_SRC R :session :results output  :exports both
+   require(lmerTest)
+   mm <- lmer(value ~ zeit * Gewichtsstatus + (1|P.Code), data[data$mg=="Progranulin",])
+
+   summary(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Lade nötiges Paket: lmerTest
+Lade nötiges Paket: Matrix
+Lade nötiges Paket: Rcpp
+Linear mixed model fit by REML ['lmerMod']
+Formula: value ~ zeit * Gewichtsstatus + (1 | P.Code)
+   Data: data[data$mg == "Progranulin", ]
+
+REML criterion at convergence: 3294.4
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-3.5299 -0.4334 -0.0087  0.4472  6.6029 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 37.31    6.108   
+ Residual             12.31    3.508   
+Number of obs: 576, groups:  P.Code, 66
+
+Fixed effects:
+                          Estimate Std. Error t value
+(Intercept)               24.85212    1.14582  21.689
+zeit                      -0.05831    0.16171  -0.361
+GewichtsstatusAdipös       0.76332    1.59779   0.478
+zeit:GewichtsstatusAdipös -0.05086    0.22809  -0.223
+
+Correlation of Fixed Effects:
+           (Intr) zeit   GwcAö 
+zeit       -0.281              
+GwchtsstAö -0.717  0.201       
+zt:GwchtAö  0.199 -0.709 -0.282
+Warning messages:
+1: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+2: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+**  Model mit Gewichtsstatus
+#+BEGIN_SRC R :session :results output  :exports both
+   require(lmerTest)
+   mm <- lmer(value ~ Gewichtsstatus + (1|P.Code), data[data$mg=="Progranulin",])
+
+   summary(mm)
+#+END_SRC
+
+
+#+RESULTS:
+#+begin_example
+Linear mixed model fit by REML ['lmerMod']
+Formula: value ~ Gewichtsstatus + (1 | P.Code)
+   Data: data[data$mg == "Progranulin", ]
+
+REML criterion at convergence: 3291.4
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-3.5502 -0.4303 -0.0065  0.4466  6.6034 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 37.29    6.107   
+ Residual             12.27    3.504   
+Number of obs: 576, groups:  P.Code, 66
+
+Fixed effects:
+                     Estimate Std. Error t value
+(Intercept)           24.7361     1.0994  22.499
+GewichtsstatusAdipös   0.6651     1.5325   0.434
+
+Correlation of Fixed Effects:
+           (Intr)
+GwchtsstAö -0.717
+Warning messages:
+1: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+2: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+** Chemerin Model mit zeit und Gewichts status plus interaktion
+#+BEGIN_SRC R :session :results output  :exports both
+   require(lmerTest)
+   mm <- lmer(value ~ zeit * Gewichtsstatus + (1|P.Code) , data[data$mg=="Chemerin",])
+
+   summary(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Linear mixed model fit by REML ['lmerMod']
+Formula: value ~ zeit * Gewichtsstatus + (1 | P.Code)
+   Data: data[data$mg == "Chemerin", ]
+
+REML criterion at convergence: 5248.1
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-4.1696 -0.3836 -0.0357  0.2823  7.4459 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 612.0    24.74   
+ Residual             410.1    20.25   
+Number of obs: 575, groups:  P.Code, 66
+
+Fixed effects:
+                          Estimate Std. Error t value
+(Intercept)                63.8841     4.9286  12.962
+zeit                       -1.3189     0.9507  -1.387
+GewichtsstatusAdipös       27.7753     6.8549   4.052
+zeit:GewichtsstatusAdipös  -1.1963     1.3195  -0.907
+
+Correlation of Fixed Effects:
+           (Intr) zeit   GwcAö 
+zeit       -0.390              
+GwchtsstAö -0.719  0.280       
+zt:GwchtAö  0.281 -0.720 -0.385
+Warning messages:
+1: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+2: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+** Chemerin Model mit zeit und Gewichts status ohne interaktion
+#+BEGIN_SRC R :session :results output  :exports both
+   require(lmerTest)
+   mm <- lmer(value ~ zeit + Gewichtsstatus + (1|P.Code) , data[data$mg=="Chemerin",])
+
+   summary(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Linear mixed model fit by REML ['lmerMod']
+Formula: value ~ zeit + Gewichtsstatus + (1 | P.Code)
+   Data: data[data$mg == "Chemerin", ]
+
+REML criterion at convergence: 5251.3
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-4.2270 -0.3884 -0.0396  0.2914  7.5037 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 611.6    24.73   
+ Residual             410.0    20.25   
+Number of obs: 575, groups:  P.Code, 66
+
+Fixed effects:
+                     Estimate Std. Error t value
+(Intercept)           65.1391     4.7287  13.775
+zeit                  -1.9398     0.6592  -2.943
+GewichtsstatusAdipös  25.3811     6.3237   4.014
+
+Correlation of Fixed Effects:
+           (Intr) zeit  
+zeit       -0.282       
+GwchtsstAö -0.690  0.004
+Warning messages:
+1: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+2: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+* citation
+#+BEGIN_SRC R :session :results output  :exports both
+citation("lmerTest")
+#+END_SRC
+
+#+RESULTS:
+: 
+: Bates D, Maechler M, Bolker B and Walker S (2014). _lmerTest: Linear
+: mixed-effects models using Eigen and S4_. R package version 1.1-7,
+: <URL: http://CRAN.R-project.org/package=lmerTest>.
+: 
+: Bates D, Maechler M, Bolker BM and Walker S (2014). “lmerTest: Linear
+: mixed-effects models using Eigen and S4.” ArXiv e-print; submitted to
+: _Journal of Statistical Software_, <URL:
+: http://arxiv.org/abs/1406.5823>.
+
+* citation
+#+BEGIN_SRC R :session :results output  :exports both
+citation()
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+
+To cite R in publications use:
+
+  R Core Team (2015). R: A language and environment for statistical
+  computing. R Foundation for Statistical Computing, Vienna, Austria.
+  URL http://www.R-project.org/.
+
+A BibTeX entry for LaTeX users is
+
+  @Manual{,
+    title = {R: A Language and Environment for Statistical Computing},
+    author = {{R Core Team}},
+    organization = {R Foundation for Statistical Computing},
+    address = {Vienna, Austria},
+    year = {2015},
+    url = {http://www.R-project.org/},
+  }
+
+We have invested a lot of time and effort in creating R, please cite it
+when using it for data analysis. See also ‘citation("pkgname")’ for
+citing R packages.
+#+end_example
+
+* ROC
+#+BEGIN_SRC R :session :results output  :exports both
+  require(ROCR)
+  require(flux)
+  require(dplyr)
+  require(pastecs)
+  
+  data$Einschlafuhrzeit <- as.numeric(data$Einschlafuhrzeit)
+  
+  attr(data$sleep.efficiancy,"label") <- NULL
+  class(data$sleep.efficiancy) <- "numeric"
+  
+  
+  aucvalues <- as.data.frame(data %>% group_by(P.Code,mg,Patient.Geschlecht,Gewichtsstatus,IGT,sleep.efficiancy) %>%
+      summarise(auc = auc(zeit,value)))
+  
+  require(ggplot2)
+  
+  ## ggplot(aucvalues,aes(x=Patient.Geschlecht,y=auc,fill=Gewichtsstatus)) +
+  ##     geom_boxplot() +
+  ##     facet_wrap(~mg,nrow=2,scales = "free")
+  
+  
+  aucs <- (aggregate(auc ~ mg + Patient.Geschlecht + Gewichtsstatus,
+            data=aucvalues,
+            FUN = stat.desc))
+  
+  
+  aucssex <- (aggregate(auc ~ mg + Patient.Geschlecht,
+            data=aucvalues,
+            FUN = stat.desc))
+  
+  ## require(XLConnect)
+  ## wb <- loadWorkbook("201506auc.xlsx",create=T)
+  ## createSheet(wb,"data")
+  ## writeWorksheet(wb,aucs,"data")
+  ## saveWorkbook(wb)
+  
+  ## write.csv(aucs,file="201506tmp.csv")
+  ## aucs <- read.csv("201506tmp.csv")
+  
+  ## write.csv(aucssex,file="201507tmp.csv")
+  ## aucssex <- read.csv("201507tmp.csv")
+  
+  
+  ## require(XLConnect)
+  ## wb <- loadWorkbook("201507aucsex.xlsx",create=T)
+  ## createSheet(wb,"data")
+  ## writeWorksheet(wb,aucssex,"data")
+  ## saveWorkbook(wb)
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC R :session :results output  :exports both
+  aggregate(auc ~ mg + Gewichtsstatus,
+            data=aucvalues,
+            FUN = stat.desc)
+
+#+END_SRC
+
+** Schlafqualitaet summaries
+
+#+BEGIN_SRC R :session :results output  :exports both
+aucs <- (aggregate(auc ~ mg + goodsleep,
+          data=aucvalues,
+          FUN = stat.desc))
+
+#+END_SRC
+
+** t test Progranulin
+
+#+BEGIN_SRC R :session :results output  :exports both
+  t.test(auc ~ goodsleep,data=aucvalues[aucvalues$mg=="Progranulin",])
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+
+	Welch Two Sample t-test
+
+data:  auc by goodsleep
+t = -0.85034, df = 48.335, p-value = 0.3993
+alternative hypothesis: true difference in means is not equal to 0
+95 percent confidence interval:
+ -19.133310   7.758251
+sample estimates:
+mean in group FALSE  mean in group TRUE 
+           96.56101           102.24854
+#+end_example
+
+
+** t test Chemerin
+
+#+BEGIN_SRC R :session :results output  :exports both
+  t.test(auc ~ goodsleep,data=aucvalues[aucvalues$mg=="Chemerin",])
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+
+	Welch Two Sample t-test
+
+data:  auc by goodsleep
+t = 0.085734, df = 34.579, p-value = 0.9322
+alternative hypothesis: true difference in means is not equal to 0
+95 percent confidence interval:
+ -66.02260  71.84224
+sample estimates:
+mean in group FALSE  mean in group TRUE 
+           292.3244            289.4146
+#+end_example
+
+* Anova 
+** Chemerin ~ geschlecht und Gewichtsstatus und interaktion
+#+BEGIN_SRC R :session :results output  :exports both
+  auc.ch <- aucvalues[aucvalues$mg=="Chemerin",]
+
+  mm <- aov(auc ~ Patient.Geschlecht * Gewichtsstatus,data=auc.ch)
+  summary(mm)
+#+END_SRC
+
+#+RESULTS:
+:                                   Df Sum Sq Mean Sq F value   Pr(>F)    
+: Patient.Geschlecht                 1  12485   12485   1.056 0.308066    
+: Gewichtsstatus                     1 157337  157337  13.310 0.000543 ***
+: Patient.Geschlecht:Gewichtsstatus  1    209     209   0.018 0.894646    
+: Residuals                         62 732874   11821                     
+: ---
+: Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#+BEGIN_SRC R :session :results output  :exports both
+  TukeyHSD(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+  Tukey multiple comparisons of means
+    95% family-wise confidence level
+
+Fit: aov(formula = auc ~ Patient.Geschlecht * Gewichtsstatus, data = auc.ch)
+
+$Patient.Geschlecht
+                      diff       lwr      upr     p adj
+männlich-weiblich 28.35378 -26.79495 83.50251 0.3080664
+
+$Gewichtsstatus
+                   diff      lwr      upr     p adj
+Adipös-schlank 97.45498 43.92674 150.9832 0.0005585
+
+$`Patient.Geschlecht:Gewichtsstatus`
+					diff       lwr      upr     p adj
+männlich:schlank-weiblich:schlank  25.21126 -81.62255 132.0451 0.9243145
+weiblich:Adipös-weiblich:schlank  100.70387  11.02152 190.3862 0.0217688
+männlich:Adipös-weiblich:schlank  118.54405  19.50646 217.5816 0.0127076
+weiblich:Adipös-männlich:schlank   75.49261 -32.25538 183.2406 0.2603775
+männlich:Adipös-männlich:schlank   93.33279 -22.31819 208.9838 0.1548394
+männlich:Adipös-weiblich:Adipös    17.84018 -82.18288 117.8632 0.9651809
+#+end_example
+
+** Chemerin ~ geschlecht und Gewichtsstatus und ohne interaktion
+#+BEGIN_SRC R :session :results output  :exports both
+  auc.ch <- aucvalues[aucvalues$mg=="Chemerin",]
+
+  mm <- aov(auc ~ Patient.Geschlecht + Gewichtsstatus,data=auc.ch)
+  summary(mm)
+#+END_SRC
+
+#+RESULTS:
+:                    Df Sum Sq Mean Sq F value  Pr(>F)    
+: Patient.Geschlecht  1  12485   12485   1.073 0.30423    
+: Gewichtsstatus      1 157337  157337  13.521 0.00049 ***
+: Residuals          63 733083   11636                    
+: ---
+: Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#+BEGIN_SRC R :session :results output  :exports both
+  TukeyHSD(mm)
+#+END_SRC
+
+
+** Progranulin ~ geschlecht und Gewichtsstatus und interaktion
+
+#+BEGIN_SRC R :session :results output  :exports both
+  auc.pro <- aucvalues[aucvalues$mg=="Progranulin",]
+
+  mm <- aov(auc ~ Patient.Geschlecht * Gewichtsstatus,data=auc.pro)
+  summary(mm)
+#+END_SRC
+
+#+RESULTS:
+:                                   Df Sum Sq Mean Sq F value  Pr(>F)   
+: Patient.Geschlecht                 1   5084    5084   8.683 0.00452 **
+: Gewichtsstatus                     1     10      10   0.017 0.89648   
+: Patient.Geschlecht:Gewichtsstatus  1   3029    3029   5.173 0.02641 * 
+: Residuals                         62  36300     585                   
+: ---
+: Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+#+BEGIN_SRC R :session :results output  :exports both
+  TukeyHSD(mm)
+#+END_SRC
+
+
+#+RESULTS:
+#+begin_example
+  Tukey multiple comparisons of means
+    95% family-wise confidence level
+
+Fit: aov(formula = auc ~ Patient.Geschlecht * Gewichtsstatus, data = auc.pro)
+
+$Patient.Geschlecht
+                      diff      lwr      upr     p adj
+männlich-weiblich 18.09236 5.818679 30.36605 0.0045214
+
+$Gewichtsstatus
+                     diff       lwr      upr     p adj
+Adipös-schlank -0.7766727 -12.68971 11.13636 0.8967325
+
+$`Patient.Geschlecht:Gewichtsstatus`
+                                        diff        lwr       upr     p adj
+männlich:schlank-weiblich:schlank   3.195595 -20.580919 26.972109 0.9845399
+weiblich:Adipös-weiblich:schlank  -11.317780 -31.277133  8.641573 0.4454366
+männlich:Adipös-weiblich:schlank   19.938274  -2.103144 41.979692 0.0899705
+weiblich:Adipös-männlich:schlank  -14.513375 -38.493348  9.466598 0.3873423
+männlich:Adipös-männlich:schlank   16.742679  -8.996153 42.481510 0.3235459
+männlich:Adipös-weiblich:Adipös    31.256054   8.995312 53.516795 0.0024777
+#+end_example
+
+
+** anova bzw t-test: Chemerin, nur adipoese, vergl. auc ~ IGT 
+
+#+BEGIN_SRC R :session :results output  :exports both
+  auc.ch <- auc.ch[auc.ch$Gewichtsstatus != "schlank",]
+  mm <- aov(auc ~ IGT,data=auc.ch)
+  summary(mm)
+#+END_SRC
+
+#+RESULTS:
+:             Df Sum Sq Mean Sq F value Pr(>F)
+: IGT          1  11218   11218   0.593  0.447
+: Residuals   30 567934   18931               
+: 2 observations deleted due to missingness
+
+#+BEGIN_SRC R :session :results output  :exports both
+  TukeyHSD(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+  Tukey multiple comparisons of means
+    95% family-wise confidence level
+
+Fit: aov(formula = auc ~ IGT, data = auc.ch)
+
+$IGT
+                                                      diff       lwr      upr
+gestörte Glukosetoleranz-normale Glukosetoleranz -43.23958 -157.9562 71.47702
+                                                     p adj
+gestörte Glukosetoleranz-normale Glukosetoleranz 0.4474473
+#+end_example
+
+#+BEGIN_SRC R :session :results output  :exports both
+  require(pastecs)
+  aggregate(auc ~ IGT, data=auc.ch, stat.desc, basic=F, simplify=T)
+#+END_SRC
+
+#+RESULTS:
+:                        IGT   auc.median     auc.mean  auc.SE.mean
+: 1  normale Glukosetoleranz 3.480625e+02 3.548802e+02 2.425602e+01
+: 2 gestörte Glukosetoleranz 2.610625e+02 3.116406e+02 6.589523e+01
+:   auc.CI.mean.0.95      auc.var  auc.std.dev auc.coef.var
+: 1     5.017740e+01 1.412051e+04 1.188297e+02 3.348446e-01
+: 2     1.558175e+02 3.473745e+04 1.863798e+02 5.980602e-01
+
+
+
+  - die Anova ist an der Stelle unnoetig und unueblich, man nimmt einen T-Test, der aber exakt das gleiche Ergebnis liefert
+
+#+BEGIN_SRC R :session :results output  :exports both
+  auc.ch <- auc.ch[auc.ch$Gewichtsstatus != "schlank",]
+  t.test(auc ~ IGT,data=auc.ch)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+
+	Welch Two Sample t-test
+
+data:  auc by IGT
+t = 0.61579, df = 8.9753, p-value = 0.5533
+alternative hypothesis: true difference in means is not equal to 0
+95 percent confidence interval:
+ -115.6706  202.1498
+sample estimates:
+ mean in group normale Glukosetoleranz mean in group gestörte Glukosetoleranz 
+                              354.8802                               311.6406
+#+end_example
+
+
+** anova bzw t-test: progranulin, nur adipoese, vergl. auc ~ IGT 
+
+#+BEGIN_SRC R :session :results output  :exports both
+  auc.pro <- auc.pro[ auc.pro$Gewichtsstatus != "schlank",]
+  mm <- aov(auc ~ IGT,data=auc.pro)
+  summary(mm)
+#+END_SRC
+
+#+RESULTS:
+:             Df Sum Sq Mean Sq F value Pr(>F)
+: IGT          1    125   124.7   0.129  0.722
+: Residuals   30  28930   964.3               
+: 10 observations deleted due to missingness
+
+#+BEGIN_SRC R :session :results output  :exports both
+  TukeyHSD(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+  Tukey multiple comparisons of means
+    95% family-wise confidence level
+
+Fit: aov(formula = auc ~ IGT, data = auc.pro)
+
+$IGT
+                                                      diff       lwr      upr
+gestörte Glukosetoleranz-normale Glukosetoleranz -4.558854 -30.45009 21.33238
+                                                     p adj
+gestörte Glukosetoleranz-normale Glukosetoleranz 0.7216672
+#+end_example
+
+#+BEGIN_SRC R :session :results output  :exports both
+  auc.pro <- auc.pro[ auc.pro$Gewichtsstatus != "schlank",]
+  t.test(auc ~ IGT,data=auc.pro)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+
+	Welch Two Sample t-test
+
+data:  auc by IGT
+t = 0.37401, df = 12.899, p-value = 0.7145
+alternative hypothesis: true difference in means is not equal to 0
+95 percent confidence interval:
+ -21.79546  30.91317
+sample estimates:
+ mean in group normale Glukosetoleranz mean in group gestörte Glukosetoleranz 
+                              100.5064                                95.9475
+#+end_example
+
+[[gruppen.png]]
+
+
+#+BEGIN_SRC R :session :results output  :exports both
+  require(pastecs)
+  aggregate(auc ~ IGT, data=auc.pro, stat.desc, basic=F, simplify=T)
+#+END_SRC
+
+#+RESULTS:
+:                        IGT  auc.median    auc.mean auc.SE.mean auc.CI.mean.0.95
+: 1  normale Glukosetoleranz  95.9750000 100.2653261   4.0912628        8.2402262
+: 2 gestörte Glukosetoleranz  95.8050000  94.3530000   8.2450051       18.6514974
+:       auc.var auc.std.dev auc.coef.var
+: 1 769.9678274  27.7482941    0.2767487
+: 2 679.8010956  26.0729955    0.2763346
+
+* mit Geschlecht
+
+**  Progranulin Model mit zeit und Gewichts status plus interaktion
+#+BEGIN_SRC R :session :results output  :exports both
+  require(lmerTest)
+  mm <- lmer(value ~ Gewichtsstatus * Patient.Geschlecht + (1|P.Code), data[data$mg=="Progranulin",])
+  summary(mm)
+
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Linear mixed model fit by REML t-tests use Satterthwaite approximations to
+  degrees of freedom [merModLmerTest]
+Formula: value ~ Gewichtsstatus * Patient.Geschlecht + (1 | P.Code)
+   Data: data[data$mg == "Progranulin", ]
+
+REML criterion at convergence: 3274.5
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-3.5200 -0.4203 -0.0173  0.4458  6.6112 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 32.61    5.711   
+ Residual             12.27    3.503   
+Number of obs: 576, groups:  P.Code, 66
+
+Fixed effects:
+                                                Estimate Std. Error      df
+(Intercept)                                      24.4945     1.2727 61.9400
+GewichtsstatusAdipös                             -1.8388     1.8237 62.1300
+Patient.Geschlechtmännlich                        0.7033     2.1699 61.8500
+GewichtsstatusAdipös:Patient.Geschlechtmännlich   5.9505     2.9738 61.9500
+                                                t value Pr(>|t|)    
+(Intercept)                                      19.246   <2e-16 ***
+GewichtsstatusAdipös                             -1.008   0.3172    
+Patient.Geschlechtmännlich                        0.324   0.7469    
+GewichtsstatusAdipös:Patient.Geschlechtmännlich   2.001   0.0498 *  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Correlation of Fixed Effects:
+           (Intr) GwcAö  Pt.Gä 
+GwchtsstAö -0.698              
+Ptnt.Gschä -0.587  0.409       
+GwAö:P.Gä   0.428 -0.613 -0.730
+Warnmeldungen:
+1: In summary.merMod(model, ddf = "lmerTest") : additional arguments ignored
+2: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+3: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+#+BEGIN_SRC R :session :results output  :exports both
+   mm <- lmer(value ~ Gewichtsstatus * Patient.Geschlecht + (1|P.Code), data[data$mg=="Progranulin",])
+
+   summary(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Linear mixed model fit by REML t-tests use Satterthwaite approximations to
+  degrees of freedom [merModLmerTest]
+Formula: value ~ Gewichtsstatus * Patient.Geschlecht + (1 | P.Code)
+   Data: data[data$mg == "Progranulin", ]
+
+REML criterion at convergence: 3274.5
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-3.5200 -0.4203 -0.0173  0.4458  6.6112 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 32.61    5.711   
+ Residual             12.27    3.503   
+Number of obs: 576, groups:  P.Code, 66
+
+Fixed effects:
+                                                Estimate Std. Error      df
+(Intercept)                                      24.4945     1.2727 61.9400
+GewichtsstatusAdipös                             -1.8388     1.8237 62.1300
+Patient.Geschlechtmännlich                        0.7033     2.1699 61.8500
+GewichtsstatusAdipös:Patient.Geschlechtmännlich   5.9505     2.9738 61.9500
+                                                t value Pr(>|t|)    
+(Intercept)                                      19.246   <2e-16 ***
+GewichtsstatusAdipös                             -1.008   0.3172    
+Patient.Geschlechtmännlich                        0.324   0.7469    
+GewichtsstatusAdipös:Patient.Geschlechtmännlich   2.001   0.0498 *  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Correlation of Fixed Effects:
+           (Intr) GwcAö  Pt.Gä 
+GwchtsstAö -0.698              
+Ptnt.Gschä -0.587  0.409       
+GwAö:P.Gä   0.428 -0.613 -0.730
+Warnmeldungen:
+1: In summary.merMod(model, ddf = "lmerTest") : additional arguments ignored
+2: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+3: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+#+BEGIN_SRC R :session :results output  :exports both
+   mm <- lmer(value ~ Patient.Geschlecht + (1|P.Code), data[data$mg=="Progranulin" & data$Gewichtsstatus=="schlank",])
+
+   summary(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Linear mixed model fit by REML t-tests use Satterthwaite approximations to
+  degrees of freedom [merModLmerTest]
+Formula: value ~ Patient.Geschlecht + (1 | P.Code)
+   Data: data[data$mg == "Progranulin" & data$Gewichtsstatus == "schlank",  
+    ]
+
+REML criterion at convergence: 1649.2
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-2.8986 -0.4272 -0.0091  0.3939  6.1308 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 29.13    5.397   
+ Residual             14.33    3.785   
+Number of obs: 284, groups:  P.Code, 32
+
+Fixed effects:
+                           Estimate Std. Error      df t value Pr(>|t|)    
+(Intercept)                 24.4953     1.2103 30.0080   20.24   <2e-16 ***
+Patient.Geschlechtmännlich   0.7025     2.0633 29.9540    0.34    0.736    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Correlation of Fixed Effects:
+           (Intr)
+Ptnt.Gschä -0.587
+Warnmeldungen:
+1: In summary.merMod(model, ddf = "lmerTest") : additional arguments ignored
+2: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+3: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+
+#+BEGIN_SRC R :session :results output  :exports both
+   mm <- lmer(value ~ Patient.Geschlecht + (1|P.Code), data[data$mg=="Progranulin" & data$Gewichtsstatus!="schlank",])
+
+   summary(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Linear mixed model fit by REML t-tests use Satterthwaite approximations to
+  degrees of freedom [merModLmerTest]
+Formula: value ~ Patient.Geschlecht + (1 | P.Code)
+   Data: data[data$mg == "Progranulin" & data$Gewichtsstatus != "schlank",  
+    ]
+
+REML criterion at convergence: 1618
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-3.8539 -0.4268 -0.0201  0.5068  4.2812 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 35.90    5.992   
+ Residual             10.27    3.205   
+Number of obs: 292, groups:  P.Code, 34
+
+Fixed effects:
+                           Estimate Std. Error     df t value Pr(>|t|)    
+(Intercept)                  22.657      1.363 32.110  16.621  < 2e-16 ***
+Patient.Geschlechtmännlich    6.655      2.123 32.000   3.135  0.00367 ** 
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Correlation of Fixed Effects:
+           (Intr)
+Ptnt.Gschä -0.642
+Warnmeldungen:
+1: In summary.merMod(model, ddf = "lmerTest") : additional arguments ignored
+2: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+3: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+
+
+** Chemerin Model mit zeit und Gewichts status plus interaktion
+#+BEGIN_SRC R :session :results output  :exports both
+  mm <- lmer(value ~ zeit + Gewichtsstatus * Patient.Geschlecht + (1|P.Code) ,
+             data[data$mg=="Chemerin",])
+
+  summary(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Linear mixed model fit by REML t-tests use Satterthwaite approximations to
+  degrees of freedom [merModLmerTest]
+Formula: value ~ zeit + Gewichtsstatus * Patient.Geschlecht + (1 | P.Code)
+   Data: data[data$mg == "Chemerin", ]
+
+REML criterion at convergence: 5238.3
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-4.2320 -0.3877 -0.0373  0.2938  7.4979 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 628.7    25.07   
+ Residual             410.0    20.25   
+Number of obs: 575, groups:  P.Code, 66
+
+Fixed effects:
+                                                Estimate Std. Error       df
+(Intercept)                                      63.2536     5.8298  69.1000
+zeit                                             -1.9406     0.6592 508.7000
+GewichtsstatusAdipös                             26.3065     8.1311  62.2000
+Patient.Geschlechtmännlich                        5.4796     9.6724  61.9000
+GewichtsstatusAdipös:Patient.Geschlechtmännlich  -3.1526    13.2543  62.0000
+                                                t value Pr(>|t|)    
+(Intercept)                                      10.850  < 2e-16 ***
+zeit                                             -2.944  0.00339 ** 
+GewichtsstatusAdipös                              3.235  0.00195 ** 
+Patient.Geschlechtmännlich                        0.567  0.57309    
+GewichtsstatusAdipös:Patient.Geschlechtmännlich  -0.238  0.81278    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Correlation of Fixed Effects:
+           (Intr) zeit   GwcAö  Pt.Gä 
+zeit       -0.228                     
+GwchtsstAö -0.681  0.005              
+Ptnt.Gschä -0.571  0.000  0.410       
+GwAö:P.Gä   0.417 -0.002 -0.613 -0.730
+Warnmeldungen:
+1: In summary.merMod(model, ddf = "lmerTest") : additional arguments ignored
+2: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+3: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+
+#+BEGIN_SRC R :session :results output  :exports both
+   mm <- lmer(value ~ zeit + Patient.Geschlecht + (1|P.Code), 
+data[data$mg=="Chemerin" & data$Gewichtsstatus=="schlank",])
+
+   summary(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Linear mixed model fit by REML t-tests use Satterthwaite approximations to
+  degrees of freedom [merModLmerTest]
+Formula: value ~ zeit + Patient.Geschlecht + (1 | P.Code)
+   Data: data[data$mg == "Chemerin" & data$Gewichtsstatus == "schlank",      ]
+
+REML criterion at convergence: 2247.5
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-3.1775 -0.4804  0.0132  0.4406  5.8067 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 265.7    16.30   
+ Residual             134.9    11.61   
+Number of obs: 280, groups:  P.Code, 32
+
+Fixed effects:
+                           Estimate Std. Error       df t value Pr(>|t|)    
+(Intercept)                 61.9912     3.8226  35.7700  16.217   <2e-16 ***
+zeit                        -1.3167     0.5452 247.1700  -2.415   0.0164 *  
+Patient.Geschlechtmännlich   5.4778     6.2393  30.0300   0.878   0.3869    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Correlation of Fixed Effects:
+           (Intr) zeit  
+zeit       -0.288       
+Ptnt.Gschä -0.562  0.000
+Warnmeldungen:
+1: In summary.merMod(model, ddf = "lmerTest") : additional arguments ignored
+2: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+3: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+
+#+BEGIN_SRC R :session :results output  :exports both
+  mm <- lmer(value ~ zeit * Patient.Geschlecht + (1|P.Code), 
+           data[data$mg=="Chemerin" & data$Gewichtsstatus!="schlank",])
+
+  summary(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Linear mixed model fit by REML t-tests use Satterthwaite approximations to
+  degrees of freedom [merModLmerTest]
+Formula: value ~ zeit * Patient.Geschlecht + (1 | P.Code)
+   Data: data[data$mg == "Chemerin" & data$Gewichtsstatus != "schlank",      ]
+
+REML criterion at convergence: 2823.3
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-3.1226 -0.3913 -0.0676  0.2588  5.6811 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 969.2    31.13   
+ Residual             669.3    25.87   
+Number of obs: 295, groups:  P.Code, 34
+
+Fixed effects:
+                                Estimate Std. Error      df t value Pr(>|t|)
+(Intercept)                       87.941      7.854  44.290  11.196 1.69e-14
+zeit                              -1.113      1.546 259.940  -0.720    0.472
+Patient.Geschlechtmännlich         8.850     12.213  43.900   0.725    0.473
+zeit:Patient.Geschlechtmännlich   -3.276      2.362 259.450  -1.387    0.167
+                                   
+(Intercept)                     ***
+zeit                               
+Patient.Geschlechtmännlich         
+zeit:Patient.Geschlechtmännlich    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Correlation of Fixed Effects:
+           (Intr) zeit   Pt.Gä 
+zeit       -0.386              
+Ptnt.Gschä -0.643  0.248       
+zt:Ptnt.Gä  0.253 -0.654 -0.384
+Warnmeldungen:
+1: In summary.merMod(model, ddf = "lmerTest") : additional arguments ignored
+2: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+3: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+help(pvalues)
+* Schlafeffizienz
+**  Progranulin Model mit zeit und Gewichts status plus interaktion
+#+BEGIN_SRC R :session
+  data$goodsleep <- data$sleep.efficiancy > 85
+  table(data$goodsleep[!duplicated(data$P.Code)])
+#+END_SRC
+
+#+BEGIN_SRC R :session :results output  :exports both
+   mm <- lmer(value ~ zeit * goodsleep + (1|P.Code), data[data$mg=="Progranulin",])
+
+   summary(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Fehler in eval(expr, envir, enclos) : Objekt 'goodsleep' nicht gefunden
+Linear mixed model fit by REML t-tests use Satterthwaite approximations to
+  degrees of freedom [merModLmerTest]
+Formula: value ~ zeit * Patient.Geschlecht + (1 | P.Code)
+   Data: data[data$mg == "Chemerin" & data$Gewichtsstatus != "schlank",      ]
+
+REML criterion at convergence: 2823.3
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-3.1226 -0.3913 -0.0676  0.2588  5.6811 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 969.2    31.13   
+ Residual             669.3    25.87   
+Number of obs: 295, groups:  P.Code, 34
+
+Fixed effects:
+                                Estimate Std. Error      df t value Pr(>|t|)
+(Intercept)                       87.941      7.854  44.290  11.196 1.69e-14
+zeit                              -1.113      1.546 259.940  -0.720    0.472
+Patient.Geschlechtmännlich         8.850     12.213  43.900   0.725    0.473
+zeit:Patient.Geschlechtmännlich   -3.276      2.362 259.450  -1.387    0.167
+                                   
+(Intercept)                     ***
+zeit                               
+Patient.Geschlechtmännlich         
+zeit:Patient.Geschlechtmännlich    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Correlation of Fixed Effects:
+           (Intr) zeit   Pt.Gä 
+zeit       -0.386              
+Ptnt.Gschä -0.643  0.248       
+zt:Ptnt.Gä  0.253 -0.654 -0.384
+Warnmeldungen:
+1: In summary.merMod(model, ddf = "lmerTest") : additional arguments ignored
+2: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+3: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+#+BEGIN_SRC R :session :results output  :exports both
+   mm <- lmer(value ~ zeit * goodsleep + (1|P.Code), data[data$mg=="Chemerin",])
+
+   summary(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Fehler in eval(expr, envir, enclos) : Objekt 'goodsleep' nicht gefunden
+Linear mixed model fit by REML t-tests use Satterthwaite approximations to
+  degrees of freedom [merModLmerTest]
+Formula: value ~ zeit * Patient.Geschlecht + (1 | P.Code)
+   Data: data[data$mg == "Chemerin" & data$Gewichtsstatus != "schlank",      ]
+
+REML criterion at convergence: 2823.3
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-3.1226 -0.3913 -0.0676  0.2588  5.6811 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 969.2    31.13   
+ Residual             669.3    25.87   
+Number of obs: 295, groups:  P.Code, 34
+
+Fixed effects:
+                                Estimate Std. Error      df t value Pr(>|t|)
+(Intercept)                       87.941      7.854  44.290  11.196 1.69e-14
+zeit                              -1.113      1.546 259.940  -0.720    0.472
+Patient.Geschlechtmännlich         8.850     12.213  43.900   0.725    0.473
+zeit:Patient.Geschlechtmännlich   -3.276      2.362 259.450  -1.387    0.167
+                                   
+(Intercept)                     ***
+zeit                               
+Patient.Geschlechtmännlich         
+zeit:Patient.Geschlechtmännlich    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Correlation of Fixed Effects:
+           (Intr) zeit   Pt.Gä 
+zeit       -0.386              
+Ptnt.Gschä -0.643  0.248       
+zt:Ptnt.Gä  0.253 -0.654 -0.384
+Warnmeldungen:
+1: In summary.merMod(model, ddf = "lmerTest") : additional arguments ignored
+2: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+3: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+#+BEGIN_SRC R :session :results output  :exports both
+   mm <- lmer(value ~ zeit + goodsleep + (1|P.Code), data[data$mg=="Chemerin",])
+
+   summary(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Fehler in eval(expr, envir, enclos) : Objekt 'goodsleep' nicht gefunden
+Linear mixed model fit by REML t-tests use Satterthwaite approximations to
+  degrees of freedom [merModLmerTest]
+Formula: value ~ zeit * Patient.Geschlecht + (1 | P.Code)
+   Data: data[data$mg == "Chemerin" & data$Gewichtsstatus != "schlank",      ]
+
+REML criterion at convergence: 2823.3
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-3.1226 -0.3913 -0.0676  0.2588  5.6811 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 969.2    31.13   
+ Residual             669.3    25.87   
+Number of obs: 295, groups:  P.Code, 34
+
+Fixed effects:
+                                Estimate Std. Error      df t value Pr(>|t|)
+(Intercept)                       87.941      7.854  44.290  11.196 1.69e-14
+zeit                              -1.113      1.546 259.940  -0.720    0.472
+Patient.Geschlechtmännlich         8.850     12.213  43.900   0.725    0.473
+zeit:Patient.Geschlechtmännlich   -3.276      2.362 259.450  -1.387    0.167
+                                   
+(Intercept)                     ***
+zeit                               
+Patient.Geschlechtmännlich         
+zeit:Patient.Geschlechtmännlich    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Correlation of Fixed Effects:
+           (Intr) zeit   Pt.Gä 
+zeit       -0.386              
+Ptnt.Gschä -0.643  0.248       
+zt:Ptnt.Gä  0.253 -0.654 -0.384
+Warnmeldungen:
+1: In summary.merMod(model, ddf = "lmerTest") : additional arguments ignored
+2: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+3: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+#+BEGIN_SRC R :session :results output  :exports both
+  mm <- lmer(value ~ sleep.efficiancy + Gewichtsstatus + (1|P.Code),
+             data[data$mg=="Progranulin",])
+
+  summary(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Linear mixed model fit by REML t-tests use Satterthwaite approximations to
+  degrees of freedom [merModLmerTest]
+Formula: value ~ sleep.efficiancy + Gewichtsstatus + (1 | P.Code)
+   Data: data[data$mg == "Progranulin", ]
+
+REML criterion at convergence: 3294.7
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-3.5523 -0.4283 -0.0092  0.4469  6.6048 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 37.31    6.108   
+ Residual             12.27    3.503   
+Number of obs: 576, groups:  P.Code, 66
+
+Fixed effects:
+                     Estimate Std. Error      df t value Pr(>|t|)    
+(Intercept)           21.2804     3.6620 63.0200   5.811 2.22e-07 ***
+sleep.efficiancy       0.0468     0.0473 62.9800   0.989    0.326    
+GewichtsstatusAdipös   0.4008     1.5560 62.9900   0.258    0.798    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Correlation of Fixed Effects:
+            (Intr) slp.ff
+slep.ffcncy -0.954       
+GwchtsstAö  -0.048 -0.172
+Warnmeldungen:
+1: In summary.merMod(model, ddf = "lmerTest") : additional arguments ignored
+2: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+3: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
+#+BEGIN_SRC R :session :results output  :exports both
+     mm <- lmer(value ~ sleep.efficiancy * zeit + Gewichtsstatus + (1|P.Code), 
+                data[data$mg=="Chemerin",])
+
+     summary(mm)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Linear mixed model fit by REML t-tests use Satterthwaite approximations to
+  degrees of freedom [merModLmerTest]
+Formula: value ~ sleep.efficiancy * zeit + Gewichtsstatus + (1 | P.Code)
+   Data: data[data$mg == "Chemerin", ]
+
+REML criterion at convergence: 5256.4
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-4.1934 -0.3934 -0.0325  0.2885  7.4878 
+
+Random effects:
+ Groups   Name        Variance Std.Dev.
+ P.Code   (Intercept) 613.2    24.76   
+ Residual             410.8    20.27   
+Number of obs: 575, groups:  P.Code, 66
+
+Fixed effects:
+                       Estimate Std. Error        df t value Pr(>|t|)    
+(Intercept)            76.29933   16.41546  87.10000   4.648 1.18e-05 ***
+sleep.efficiancy       -0.15215    0.21136  86.00000  -0.720 0.473550    
+zeit                   -0.97078    3.16984 507.20000  -0.306 0.759535    
+GewichtsstatusAdipös   26.37547    6.42645  63.00000   4.104 0.000119 ***
+sleep.efficiancy:zeit  -0.01259    0.04024 507.30000  -0.313 0.754428    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Correlation of Fixed Effects:
+            (Intr) slp.ff zeit   GwcAö 
+slep.ffcncy -0.957                     
+zeit        -0.388  0.374              
+GwchtsstAö  -0.046 -0.158  0.000       
+slp.ffcncy:  0.379 -0.382 -0.978  0.001
+Warnmeldungen:
+1: In summary.merMod(model, ddf = "lmerTest") : additional arguments ignored
+2: In abbreviate(rn, minlength = 11) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+3: In abbreviate(rn, minlength = 6) :
+  abbreviate mit nicht-ASCII Zeichen genutzt
+#+end_example
+
